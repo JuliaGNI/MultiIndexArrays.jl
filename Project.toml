@@ -1,0 +1,13 @@
+name = "MultiIndexArrays"
+uuid = "2f7e0951-2673-41f4-a6a8-e6772a4b2a08"
+authors = ["Michael Kraus"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
