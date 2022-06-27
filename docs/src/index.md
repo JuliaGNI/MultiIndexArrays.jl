@@ -8,7 +8,3 @@ Documentation for [MultiIndexArrays](https://github.com/JuliaGNI/MultiIndexArray
 
 ```@index
 ```
-
-```@autodocs
-Modules = [MultiIndexArrays]
-```
