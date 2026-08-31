@@ -1,5 +1,6 @@
 
-struct MultiIndexAxis{N, CI <: CartesianIndices{N}, LI <: LinearIndices{N}} <: AbstractArray{CartesianIndices{N},N}
+struct MultiIndexAxis{N, CI <: CartesianIndices{N}, LI <: LinearIndices{N}} <:
+       AbstractArray{CartesianIndices{N}, N}
     cartes_indices::CI
     linear_indices::LI
 
@@ -10,9 +11,11 @@ struct MultiIndexAxis{N, CI <: CartesianIndices{N}, LI <: LinearIndices{N}} <: A
 end
 
 MultiIndexAxis(inds::Vararg{AbstractUnitRange}) = MultiIndexAxis(CartesianIndices(inds))
-MultiIndexAxis(sizes::Vararg{Integer}) = MultiIndexAxis([UnitRange(1,s) for s in sizes]...)
+MultiIndexAxis(sizes::Vararg{Integer}) = MultiIndexAxis([UnitRange(1, s) for s in sizes]...)
 
-Base.:(==)(ax1::MultiIndexAxis, ax2::MultiIndexAxis) = ax1.cartes_indices == ax2.cartes_indices
+function Base.:(==)(ax1::MultiIndexAxis, ax2::MultiIndexAxis)
+    ax1.cartes_indices == ax2.cartes_indices
+end
 
 Base.axes(ax::MultiIndexAxis) = ax.cartes_indices.indices
 Base.axes(ax::MultiIndexAxis, i) = axes(ax)[i]
