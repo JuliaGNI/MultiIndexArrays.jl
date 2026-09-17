@@ -9,4 +9,6 @@ export MultiIndexAxis
 export MultiIndexArray
 export MultiIndexLazyArray
 
+include("indices.jl")
+
 end
