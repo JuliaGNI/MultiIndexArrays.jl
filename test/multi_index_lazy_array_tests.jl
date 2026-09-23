@@ -106,4 +106,9 @@ mila = MultiIndexLazyArray(T, _f, (nx, nv))
     @test thrown(() -> m[CartesianIndex(nx + 1, 1), CartesianIndex(1, 1)]).a === m
     @test thrown(() -> m[(nx + 1, 1), (1, 1)]).a === m
     @test thrown(() -> m[nx * nv + 1, 1]).a === m
+
+    # checkbounds accepts the index forms that getindex accepts, and not a mix of them
+    local e_mixed = thrown(() -> checkbounds(Bool, m, 1, CartesianIndex(1, 1)))
+    @test e_mixed isa Exception
+    @test typeof(e_mixed) == typeof(thrown(() -> m[1, CartesianIndex(1, 1)]))
 end

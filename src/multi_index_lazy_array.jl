@@ -36,25 +36,35 @@ Base.size(mila::MultiIndexLazyArray, i) = length(mila.axes[i])
 _checkaxis(ax::MultiIndexAxis, I::CartesianIndex) = I in ax.cartes_indices
 _checkaxis(ax::MultiIndexAxis, i::Integer) = checkindex(Bool, Base.OneTo(length(ax)), i)
 
+# one method per index form that `getindex` accepts, and one for the zero-dimensional case,
+# which both forms match
 function Base.checkbounds(::Type{Bool}, mila::MultiIndexLazyArray{T, N},
-        inds::Vararg{Union{CartesianIndex, Integer}, N}) where {T, N}
+        inds::Vararg{CartesianIndex, N}) where {T, N}
     all(map(_checkaxis, axes(mila), inds))
 end
 
-function Base.getindex(mila::MultiIndexLazyArray{T, N}, inds::Vararg{
-        CartesianIndex, N}) where {T, N}
+function Base.checkbounds(::Type{Bool}, mila::MultiIndexLazyArray{T, N},
+        inds::Vararg{Integer, N}) where {T, N}
+    all(map(_checkaxis, axes(mila), inds))
+end
+
+Base.checkbounds(::Type{Bool}, ::MultiIndexLazyArray{T, 0}) where {T} = true
+
+Base.@propagate_inbounds function Base.getindex(
+        mila::MultiIndexLazyArray{T, N}, inds::Vararg{CartesianIndex, N}) where {T, N}
     @boundscheck checkbounds(mila, inds...)
     mila.f(inds...)
 end
 
-function Base.getindex(mila::MultiIndexLazyArray{T, N}, inds::Vararg{Tuple, N}) where {T, N}
+Base.@propagate_inbounds function Base.getindex(
+        mila::MultiIndexLazyArray{T, N}, inds::Vararg{Tuple, N}) where {T, N}
     mila[(CartesianIndex(i) for i in inds)...]
 end
 
-function Base.getindex(mila::MultiIndexLazyArray{T, N}, inds::Vararg{
-        Integer, N}) where {T, N}
+Base.@propagate_inbounds function Base.getindex(
+        mila::MultiIndexLazyArray{T, N}, inds::Vararg{Integer, N}) where {T, N}
     @boundscheck checkbounds(mila, inds...)
-    @inbounds mila[(axes(mila, i)[inds[i]] for i in eachindex(inds))...]
+    @inbounds mila[map((ax, i) -> @inbounds(ax.cartes_indices[i]), axes(mila), inds)...]
 end
 
 function Base.materialize(mila::MultiIndexLazyArray{T, N}) where {T, N}

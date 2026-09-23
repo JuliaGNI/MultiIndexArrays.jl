@@ -1,52 +1,30 @@
 ### Indices
 
 """
-    isvalid(I::CartesianIndex, sizes::Tuple)
-    isvalid(I::CartesianIndex, nx, nv)
-
-Return `true` if every component `I[d]` lies in `1:sizes[d]`.
-
-This is `MultiIndexArrays.isvalid`, a function of its own, and not a method of `Base.isvalid`.
-It is not exported, as the name clashes with `Base.isvalid`; call it qualified or import it
-with `using MultiIndexArrays: isvalid`.
-"""
-function isvalid(I::CartesianIndex{N}, sizes::NTuple{N, Integer}) where {N}
-    all(map((i, n) -> 1 ≤ i ≤ n, Tuple(I), sizes))
-end
-
-isvalid(I::CartesianIndex, nx, nv) = isvalid(I, (nx, nv))
-
-function multiindex(i, nx, nv)
-    @assert i ≥ 1 && i ≤ nx*nv
-    CartesianIndex(mod1(i, nx), div(i-1, nx) + 1)
-end
-
-function linearindex(I, nx, nv)
-    i, j = Tuple(I)
-    @assert i ≥ 1 && i ≤ nx
-    @assert j ≥ 1 && j ≤ nv
-    (j-1) * nx + i
-end
-
-"""
     multiindex(i::Integer, sizes::Tuple)
     multiindex(i::Integer, ax::MultiIndexAxis)
+    multiindex(i, nx, nv)
 
 Convert the linear index `i` to the `CartesianIndex` it denotes on a grid of extents `sizes`,
-or on the axis `ax`. The first dimension runs fastest. Inverse of [`linearindex`](@ref).
+on the axis `ax`, or on the `nx × nv` grid. The first dimension runs fastest. Inverse of
+[`linearindex`](@ref). An index outside the grid raises a `BoundsError`.
 """
 multiindex(i::Integer, sizes::Tuple) = CartesianIndices(sizes)[i]
 multiindex(i::Integer, ax::MultiIndexAxis) = ax.cartes_indices[i]
+multiindex(i, nx, nv) = multiindex(i, (nx, nv))
 
 """
     linearindex(I::CartesianIndex, sizes::Tuple)
     linearindex(I::CartesianIndex, ax::MultiIndexAxis)
+    linearindex(I, nx, nv)
 
-Convert the `CartesianIndex` `I` to its linear index on a grid of extents `sizes`, or on the
-axis `ax`. Inverse of [`multiindex`](@ref).
+Convert the `CartesianIndex` `I` to its linear index on a grid of extents `sizes`, on the
+axis `ax`, or on the `nx × nv` grid. Inverse of [`multiindex`](@ref). An index outside the
+grid raises a `BoundsError`.
 """
 linearindex(I::CartesianIndex, sizes::Tuple) = LinearIndices(sizes)[I]
 linearindex(I::CartesianIndex, ax::MultiIndexAxis) = ax.linear_indices[I]
+linearindex(I, nx, nv) = linearindex(I, (nx, nv))
 
 # Given a linear index i, convert it to a CartesianIndex (i₁, i₂) on the nx × nv grid
 # Find the indices in the stencil (width w) around i: (i₁ ± w, i₂ ± w)
