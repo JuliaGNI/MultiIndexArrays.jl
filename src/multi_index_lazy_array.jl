@@ -33,8 +33,17 @@ Base.axes(mila::MultiIndexLazyArray, i) = mila.axes[i]
 Base.size(mila::MultiIndexLazyArray) = Tuple(length(ax) for ax in mila.axes)
 Base.size(mila::MultiIndexLazyArray, i) = length(mila.axes[i])
 
+_checkaxis(ax::MultiIndexAxis, I::CartesianIndex) = I in ax.cartes_indices
+_checkaxis(ax::MultiIndexAxis, i::Integer) = checkindex(Bool, Base.OneTo(length(ax)), i)
+
+function Base.checkbounds(::Type{Bool}, mila::MultiIndexLazyArray{T, N},
+        inds::Vararg{Union{CartesianIndex, Integer}, N}) where {T, N}
+    all(map(_checkaxis, axes(mila), inds))
+end
+
 function Base.getindex(mila::MultiIndexLazyArray{T, N}, inds::Vararg{
         CartesianIndex, N}) where {T, N}
+    @boundscheck checkbounds(mila, inds...)
     mila.f(inds...)
 end
 
@@ -44,7 +53,8 @@ end
 
 function Base.getindex(mila::MultiIndexLazyArray{T, N}, inds::Vararg{
         Integer, N}) where {T, N}
-    mila[(axes(mila, i)[inds[i]] for i in eachindex(inds))...]
+    @boundscheck checkbounds(mila, inds...)
+    @inbounds mila[(axes(mila, i)[inds[i]] for i in eachindex(inds))...]
 end
 
 function Base.materialize(mila::MultiIndexLazyArray{T, N}) where {T, N}
@@ -56,18 +66,3 @@ function Base.materialize(mila::MultiIndexLazyArray{T, N}) where {T, N}
 
     MultiIndexArray(mia, axes(mila))
 end
-
-# function Base.getindex(mila::MultiIndexLazyArray{DT,N}, indices::Vararg{CartesianIndex,N}) where {DT,N}
-#     @boundscheck checkbounds(mila, indices)
-#     # for i in eachindex(indices)
-#     #     @assert isvalid(indices[i], mila.multisizes[i])
-#     # end
-
-#     mila.f(indices...)
-# end
-
-# function getindex(mila::MultiIndexLazyArray{DT,N}, indices::Vararg{Int,N}) where {DT,N}
-#     multiindices = (multiindex(indices[i], mila.multisizes[i]) for i in eachindex(indices, mila.multisizes))
-
-#     mila[multiindices...]
-# end

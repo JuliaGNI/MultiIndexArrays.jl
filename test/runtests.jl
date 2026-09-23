@@ -5,4 +5,5 @@ using Test
     include("multi_index_axis_tests.jl")
     include("multi_index_array_tests.jl")
     include("multi_index_lazy_array_tests.jl")
+    include("indices_tests.jl")
 end

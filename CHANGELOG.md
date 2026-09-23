@@ -18,22 +18,32 @@ assembled after the fact loses exactly the reasoning that makes it worth keeping
 
 - **`multiindex`, `linearindex` and `_stencil_indices` for a periodic two-dimensional grid.**
   They convert between a linear index and a `CartesianIndex` over an `nx × nv` grid, and
-  collect the periodic `(2w+1)²` stencil around a linear index. They arrive verbatim from
-  `ReducedBasisMethods/src/gridbased/bracket_tensors.jl`, which is where the phase-space
-  bracket tensors of that package used to keep them; `PoissonBrackets`, `VlasovMethods` and
-  `ReducedBasisMethods` now share this one copy. None of them is exported — reach them as
+  collect the periodic `(2w+1)²` stencil around a linear index. These come from
+  `ReducedBasisMethods`' grid-based bracket tensors, so that `GeometricBrackets`, `VlasovMethods`
+  and `ReducedBasisMethods` can share this one copy. None of them is exported — reach them as
   `using MultiIndexArrays: multiindex`.
+
+- **Generic conversions between linear and Cartesian indices, and a predicate for validity.**
+  `multiindex(i, sizes::Tuple)` and `multiindex(i, ax::MultiIndexAxis)` convert a linear index
+  to a `CartesianIndex`, with the first dimension running fastest. `linearindex(I::CartesianIndex,
+  sizes::Tuple)` and `linearindex(I::CartesianIndex, ax::MultiIndexAxis)` convert a `CartesianIndex`
+  to a linear index; each pair forms an inverse. The `sizes::Tuple` and `MultiIndexAxis` forms
+  raise `BoundsError` when indices fall outside the grid; the `(nx, nv)` forms raise `AssertionError`.
+  Also new: `MultiIndexArrays.isvalid(I::CartesianIndex, sizes::Tuple)` and
+  `isvalid(I::CartesianIndex, nx, nv)`, a non-exported predicate that returns `true` if every
+  component of `I` lies in range. This is a function of its own, not a method of `Base.isvalid`;
+  callers migrating from `ReducedBasisMethods`' copy (which extended `Base.isvalid`) must import it
+  with `using MultiIndexArrays: isvalid`.
+
+- **Bounds checking for `MultiIndexLazyArray`:** `Base.checkbounds` now works with both
+  `CartesianIndex` and `Integer` index forms, and `getindex` on a lazy array now bounds-checks
+  before passing the index to the callable. Before, a `CartesianIndex` reached the callable
+  unchecked, and an `Integer` index raised `BoundsError` naming the axis's `CartesianIndices`
+  rather than the array. Now both raise `BoundsError` naming the array. An in-bounds `getindex`
+  still allocates nothing.
 
 ### Bug Fixes
 
 ### Breaking Changes
 
 ## Open Issues
-
-The indexing helpers above arrived unrepaired, so that the move reviews as a pure relocation.
-Two defects came with them, and neither is fixed here:
-
-- `Base.isvalid(I::CartesianIndex, nx, nv)` is **type piracy**: it adds a method to a `Base`
-  function on `Base` types, so loading this package changes `isvalid` for every caller in the
-  session.
-- `linearindex` asserts `j ≥ 1 && i ≤ nv`, which tests `i` where it means `j`.
