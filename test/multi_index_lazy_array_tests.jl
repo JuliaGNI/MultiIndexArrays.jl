@@ -74,3 +74,41 @@ mila = MultiIndexLazyArray(T, _f, (nx, nv))
 # @test mila[(1,nv)] == _parent[1,nv]
 # @test mila[(nx,1)] == _parent[nx,1]
 # @test mila[(nx,nv)] == _parent[nx,nv]
+
+@testset "Bounds checking" begin
+    local g = (I, J) -> _parent[I] + _parent[J]
+    local m = MultiIndexLazyArray(T, g, MultiIndexAxis(nx, nv), MultiIndexAxis(nx, nv))
+
+    @test checkbounds(Bool, m, CartesianIndex(nx, nv), CartesianIndex(1, 1))
+    @test !checkbounds(Bool, m, CartesianIndex(nx + 1, 1), CartesianIndex(1, 1))
+    @test checkbounds(Bool, m, nx * nv, 1)
+    @test !checkbounds(Bool, m, nx * nv + 1, 1)
+
+    @test m[CartesianIndex(nx, nv), CartesianIndex(1, 1)] == _parent[nx, nv] + _parent[1, 1]
+    @test_throws BoundsError m[CartesianIndex(nx + 1, 1), CartesianIndex(1, 1)]
+    @test_throws BoundsError m[CartesianIndex(1, 1), CartesianIndex(1, nv + 1)]
+    @test_throws BoundsError m[CartesianIndex(0, 1), CartesianIndex(1, 1)]
+
+    @test m[(nx, nv), (1, 1)] == _parent[nx, nv] + _parent[1, 1]
+    @test_throws BoundsError m[(nx + 1, 1), (1, 1)]
+    @test_throws BoundsError m[(1, 1), (1, 0)]
+
+    @test m[nx * nv, 1] == _parent[nx, nv] + _parent[1, 1]
+    @test_throws BoundsError m[nx * nv + 1, 1]
+    @test_throws BoundsError m[1, 0]
+
+    # the error names the lazy array, not an axis or the parent array behind `g`
+    local thrown = f -> try
+        f()
+    catch e
+        e
+    end
+    @test thrown(() -> m[CartesianIndex(nx + 1, 1), CartesianIndex(1, 1)]).a === m
+    @test thrown(() -> m[(nx + 1, 1), (1, 1)]).a === m
+    @test thrown(() -> m[nx * nv + 1, 1]).a === m
+
+    # checkbounds accepts the index forms that getindex accepts, and not a mix of them
+    local e_mixed = thrown(() -> checkbounds(Bool, m, 1, CartesianIndex(1, 1)))
+    @test e_mixed isa Exception
+    @test typeof(e_mixed) == typeof(thrown(() -> m[1, CartesianIndex(1, 1)]))
+end
