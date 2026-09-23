@@ -10,7 +10,7 @@ The first release, `v0.1.0`, is not written up: its record is `git log` and the 
 is named as a gap rather than reconstructed, because a changelog assembled after the fact
 loses the reasoning that makes it worth keeping.
 
-## [Unreleased] — targeting 0.1.1
+## [0.1.1] — 2026-09-23
 
 ### New Features
 
