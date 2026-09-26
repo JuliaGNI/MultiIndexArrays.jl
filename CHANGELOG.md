@@ -48,5 +48,3 @@ loses the reasoning that makes it worth keeping.
   `CartesianIndices` instead of the array.
 
 ### Breaking Changes
-
-## Open Issues
