@@ -1,3 +1,5 @@
+using MultiIndexArrays
+using Test
 
 @test MultiIndexAxis(5, 23, 45, 63) ==
       MultiIndexAxis(1:5, 1:23, 1:45, 1:63) ==

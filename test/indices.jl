@@ -1,4 +1,6 @@
+using MultiIndexArrays
 using MultiIndexArrays: multiindex, linearindex, _stencil_indices
+using Test
 
 @testset "Indices" begin
     # a non-square grid, with the first extent the larger, so that swapping i and j shows
