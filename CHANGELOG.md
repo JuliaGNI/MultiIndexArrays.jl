@@ -10,6 +10,12 @@ The first release, `v0.1.0`, is not written up: its record is `git log` and the 
 is named as a gap rather than reconstructed, because a changelog assembled after the fact
 loses the reasoning that makes it worth keeping.
 
+## [Unreleased]
+
+### Changed
+
+- **Test suite restructured with separate dependencies.** Test files renamed to match `src/` layout (removing `_tests` suffix) and organized into individual self-contained modules. Test dependencies (`Aqua`, `Random`, `SafeTestsets`, `Test`) moved to `test/Project.toml`. New code-quality suite `test/quality/aqua.jl` runs Aqua.test_all; 15 ambiguities between vararg methods (issue #3) and 4 unbound-argument methods (issue #4) marked broken. Same 215 tests, plus 9 passing and 2 broken Aqua checks.
+
 ## [0.1.1] — 2026-09-23
 
 ### New Features
