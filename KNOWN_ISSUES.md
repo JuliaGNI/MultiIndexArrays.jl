@@ -11,8 +11,3 @@ test-migration branch (`mutate.jl`, SURVIVED).
 No test compares two lazy arrays with different `f`. The mutant `mila1.f == mila2.f &&` → `true &&`
 in `src/multi_index_lazy_array.jl` survives, on `origin/main` and on the test-migration branch
 (critic round 1a, `mutate.jl`).
-
-## KI-3 · docs · wrong line numbers in issue #3
-
-Issue #3 gives the lazy-array constructors as `src/multi_index_lazy_array.jl:8, :13, :16, :20`.
-Critic round 1a reads them at lines 12, 15, 18 and 21. The issue text needs a correction.
