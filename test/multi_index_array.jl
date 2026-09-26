@@ -1,3 +1,8 @@
+using MultiIndexArrays
+using Random
+using Test
+
+Random.seed!(1234)
 
 const nx = 10
 const nv = 24
