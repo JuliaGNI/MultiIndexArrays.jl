@@ -10,3 +10,4 @@ MultiIndexArrays = {path = ".."}
 
 [compat]
 Aqua = "0.8.18"
+SafeTestsets = "0.1.0"
