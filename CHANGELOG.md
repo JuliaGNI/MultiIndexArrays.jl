@@ -14,6 +14,7 @@ loses the reasoning that makes it worth keeping.
 
 ### Changed
 
+- **CI coverage and cache.** CI uploads coverage from the `Julia 1 - ubuntu-latest` job instead of `Julia min`, and a test job saves the Julia cache only when it succeeds.
 - **Test suite restructured with separate dependencies.** Test files renamed to match `src/` layout (removing `_tests` suffix) and organized into individual self-contained modules. Test dependencies (`Aqua`, `Random`, `SafeTestsets`, `Test`) moved to `test/Project.toml`. New code-quality suite `test/quality/aqua.jl` runs Aqua.test_all; 15 ambiguities between vararg methods (issue #3) and 4 unbound-argument methods (issue #4) marked broken. Same 215 tests, plus 9 passing and 2 broken Aqua checks.
 
 ## [0.1.1] — 2026-09-23
