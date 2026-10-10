@@ -8,4 +8,5 @@ if "core" in GROUPS
     @safetestset "Multi-index array" include("multi_index_array.jl")
     @safetestset "Multi-index lazy array" include("multi_index_lazy_array.jl")
     @safetestset "Indices" include("indices.jl")
+    @safetestset "Grid tensor" include("grid_tensor.jl")
 end
