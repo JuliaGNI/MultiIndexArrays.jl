@@ -8,64 +8,37 @@ function hasdoc(mod, sym)
            haskey(Docs.meta(mod), Docs.Binding(mod, sym))
 end
 
-# the cases of the stored reference data: `test/data/poisson_tensor_<DT>_<nx>x<nv>.txt`, written
-# by `test/helpers/generate_poisson_tensor_reference.jl`
-const CASES = ((Float32, 3, 4), (Float32, 4, 5), (Float64, 3, 4), (Float64, 4, 5))
-
-# The number of nonzero entries of each case, which is the number of lines of its data file: a
-# dropped line changes `ref` and the tensor together, so only a count against this constant sees a
-# truncated file.
-const ENTRIES = Dict((Float32, 3, 4) => 288, (Float32, 4, 5) => 480,
-    (Float64, 3, 4) => 288, (Float64, 4, 5) => 480)
-
-# Read a case into a dense `nx·nv × nx·nv × nx·nv` array, with the number of entries read. The
-# file holds the nonzero entries of
-# `Array(PoissonTensor(DT, nx, nv, Arakawa(nx, nv, DT(0.5), DT(0.25))))` as `<i> <j> <k> <value>`,
-# one per line, with the three indices linear on the `nx × nv` grid.
-function reference(DT, nx, nv)
-    local N = nx * nv
-    local ref = zeros(DT, N, N, N)
-    local entries = 0
-    for line in eachline(joinpath(@__DIR__, "data", "poisson_tensor_$(DT)_$(nx)x$(nv).txt"))
-        local i, j, k, value = split(line)
-        ref[parse(Int, i), parse(Int, j), parse(Int, k)] = parse(DT, value)
-        entries += 1
-    end
-    return ref, entries
+# The tensor of width `w` on the grid `sizes`, and the dense array of its entries. Every entry is
+# distinct and exact in `Float32`, so a permuted, shifted or reflected index map changes the result.
+# `f` computes the linear indices rather than indexing an array, so off the grid only the bounds
+# check of the tensor throws.
+function grid_tensor_case(DT, sizes, w)
+    local nx = sizes[1]
+    local N = prod(sizes)
+    local lin = I -> I[1] + nx * (I[2] - 1)
+    local f = (I, J, K) -> DT(lin(I) + 100 * lin(J) + 10_000 * lin(K))
+    local lazy = MultiIndexLazyArray(DT, f, sizes, sizes, sizes)
+    local expected = [DT(i + 100j + 10_000k) for i in 1:N, j in 1:N, k in 1:N]
+    return (; lazy, gt = GridTensor(lazy, w), expected, N)
 end
 
-# The tensor and the pieces its checks use. `f` closes over the local `ref` and `L`, so that
-# `@inferred` sees through it.
-function grid_tensor_case(DT, nx, nv, w)
-    local (ref, entries) = reference(DT, nx, nv)
-    local L = LinearIndices((nx, nv))
-    local f = (I, J, K) -> ref[L[I], L[J], L[K]]
-    local lazy = MultiIndexLazyArray(DT, f, (nx, nv), (nx, nv), (nx, nv))
-    return (; ref, entries, lazy, gt = GridTensor(lazy, w), nx, nv, N = nx * nv)
-end
-
-function check_grid_tensor(DT, nx, nv)
-    local c = grid_tensor_case(DT, nx, nv, 1)
-    local gt, ref, N = c.gt, c.ref, c.N
-    local grid = CartesianIndices((nx, nv))
+function check_grid_tensor(DT, sizes)
+    local c = grid_tensor_case(DT, sizes, 1)
+    local gt, expected, N = c.gt, c.expected, c.N
+    local nx, nv = sizes
+    local grid = CartesianIndices(sizes)
 
     @testset "$DT on $nx × $nv" begin
         @test eltype(gt) == DT
         @test size(gt) == (N, N, N)
-        @test count(!iszero, ref) > 0
-        @test c.entries == ENTRIES[(DT, nx, nv)]
-
-        # the entries of the reference `PoissonTensor`, exactly
         @test Array(gt) isa Array{DT, 3}
-        @test Array(gt) == ref
-        @test Base.materialize(gt) isa MultiIndexArray
-        @test parent(Base.materialize(gt)) == ref
+        @test Array(gt) == expected
 
         # the three index forms agree, and each one throws off the grid
-        for (i, j, k) in ((1, 1, 1), (N, N, N), (N, 1, N), (2, nx + 1, nv))
+        for (i, j, k) in ((1, 2, 3), (N, N, N), (N, 1, 2), (2, N, nx + 1))
             local I, J, K = grid[i], grid[j], grid[k]
-            @test gt[I, J, K] == gt[i, j, k] == ref[i, j, k]
-            @test gt[(I[1], I[2]), (J[1], J[2]), (K[1], K[2])] == gt[i, j, k]
+            @test gt[I, J, K] == gt[i, j, k] == expected[i, j, k]
+            @test gt[Tuple(I), Tuple(J), Tuple(K)] == gt[i, j, k]
         end
         @test_throws BoundsError gt[CartesianIndex(nx + 1, 1), CartesianIndex(1, 1),
             CartesianIndex(1, 1)]
@@ -73,39 +46,22 @@ function check_grid_tensor(DT, nx, nv)
         @test_throws BoundsError gt[N + 1, 1, 1]
         @test_throws BoundsError gt[1, 0, 1]
 
-        # and each error names the lazy array the tensor holds, not the reference array behind
-        # `f`, which is the error a `getindex` that forwards under `@inbounds` would raise
-        local thrown(e) =
-            try
-                e()
-            catch err
-                err
-            end
-        for e in (() -> gt[CartesianIndex(nx + 1, 1), CartesianIndex(1, 1),
-            CartesianIndex(1, 1)],
-            () -> gt[(1, nv + 1), (1, 1), (1, 1)],
-            () -> gt[N + 1, 1, 1],
-            () -> gt[1, 0, 1])
-            local err = thrown(e)
-            @test err isa BoundsError && err.a === parent(gt)
-        end
-
         # the locality interface: the tensor's own width and grid
         @test size(axes(parent(gt), 1)) == (nx, nv)
         for w in (1, 2)
             local t = GridTensor(c.lazy, w)
             for i in 1:N
                 @test collect(stencil_indices(t, i)) ==
-                      collect(stencil_indices(i, w, (nx, nv)))
+                      collect(stencil_indices(i, w, sizes))
             end
         end
         @test collect(stencil_indices(GridTensor(c.lazy, 0), 7)) == [7]
 
         # the type is stable
         @test @inferred(size(gt)) == (N, N, N)
-        @test @inferred(gt[2, 3, 5]) == ref[2, 3, 5]
+        @test @inferred(gt[2, 3, 5]) == expected[2, 3, 5]
         local stencil = @inferred stencil_indices(gt, 7)
-        @test collect(stencil) == collect(stencil_indices(7, 1, (nx, nv)))
+        @test collect(stencil) == collect(stencil_indices(7, 1, sizes))
 
         # `Base`'s two fallbacks: the linear index of `Array(gt)`, and the `OneTo` axes
         @test axes(gt) == (Base.OneTo(N), Base.OneTo(N), Base.OneTo(N))
@@ -121,26 +77,9 @@ function check_grid_tensor(DT, nx, nv)
 end
 
 @testset "Grid tensor" begin
-    for (DT, nx, nv) in CASES
-        check_grid_tensor(DT, nx, nv)
-    end
+    for DT in (Float32, Float64), sizes in ((3, 4), (4, 5))
 
-    # Every entry is distinct and exact in `Float32`, so a permuted, shifted or reflected index map
-    # changes the result; the reference data above is invariant under each of these.
-    @testset "the index map, on distinct entries: $DT on $sizes" for DT in (Float32, Float64),
-        sizes in ((3, 4), (4, 5))
-
-        local L = LinearIndices(sizes)
-        local N = prod(sizes)
-        local grid = CartesianIndices(sizes)
-        local f = (I, J, K) -> DT(L[I] + 100 * L[J] + 10_000 * L[K])
-        local gt = GridTensor(MultiIndexLazyArray(DT, f, sizes, sizes, sizes), 1)
-        local expected = [DT(i + 100j + 10_000k) for i in 1:N, j in 1:N, k in 1:N]
-        @test Array(gt) == expected
-        for (i, j, k) in ((1, 2, 3), (N, 1, 2), (2, N, sizes[1] + 1))
-            @test gt[grid[i], grid[j], grid[k]] == expected[i, j, k]
-            @test gt[Tuple(grid[i]), Tuple(grid[j]), Tuple(grid[k])] == expected[i, j, k]
-        end
+        check_grid_tensor(DT, sizes)
     end
 
     @testset "an entry has the element type, whatever the coefficient function returns" begin

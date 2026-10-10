@@ -16,10 +16,10 @@ loses the reasoning that makes it worth keeping.
 
 - **`GridTensor`, a lazy grid tensor with a stencil width.** `GridTensor(tensor, w)` wraps a
   rank-`N` `MultiIndexLazyArray` over one grid, and a stencil width `w`, as an
-  `AbstractArray{DT, N}` with `Base`'s `OneTo` axes. `size`, `getindex` in each
-  of the three index forms of the lazy array and by linear index, `parent`, `Base.materialize` and
-  `Array` work on it. The constructor raises `ArgumentError` when the axes of the lazy array are
-  not all the same grid, or when `w` is negative.
+  `AbstractArray{DT, N}` with `Base`'s `OneTo` axes. `size`, `getindex` (in each of the three index
+  forms of the lazy array, and by linear index), `parent` and `Array` work on it. The constructor
+  raises `ArgumentError` when the axes of the lazy array are not all the same grid, or when `w` is
+  negative.
 
 - **`stencil_indices`, the periodic stencil as a lazy iterator.** `stencil_indices(i, w, sizes)`
   and `stencil_indices(gt, i)` return an iterator over the `(2w+1)^D` linear indices of the

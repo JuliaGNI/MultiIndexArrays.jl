@@ -46,8 +46,6 @@ Base.size(gt::GridTensor) = size(gt.tensor)
 
 Base.parent(gt::GridTensor) = gt.tensor
 
-Base.materialize(gt::GridTensor) = Base.materialize(parent(gt))
-
 # One method takes all three index forms of the lazy array, so that no two methods tie at `N = 0`;
 # a call uses one form for all its indices. `AbstractArray` answers a single linear index itself.
 # The entry is converted to `DT`, because the coefficient function may return another type.
