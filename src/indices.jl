@@ -54,6 +54,16 @@ Base.length(s::StencilIndices{D}) where {D} = (2 * s.width + 1)^D
 Base.eltype(::Type{<:StencilIndices}) = Int
 Base.IteratorSize(::Type{<:StencilIndices}) = Base.HasLength()
 
+# The length above, in checked arithmetic: `length` returns an `Int`, so a width whose stencil
+# holds more entries than one is refused at construction rather than wrapped around by it.
+function _stencil_length(w::Int, D::Int)
+    local n = 1
+    for _ in 1:D
+        n = Base.checked_mul(n, Base.checked_add(Base.checked_mul(w, 2), 1))
+    end
+    return n
+end
+
 # The linear index of the neighbour at the offset `offs`, whose every component the periodic grid
 # wraps back into it. The first dimension runs fastest, as `LinearIndices` has it.
 @inline function _stencil_index(s::StencilIndices{D}, offs::NTuple{D, Int}) where {D}
@@ -108,5 +118,6 @@ true
 """
 function stencil_indices(i::Integer, w::Integer, sizes::NTuple{D, Int}) where {D}
     w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
+    _stencil_length(Int(w), D)   # refused here, not wrapped around by `Base.length`
     return StencilIndices(multiindex(i, sizes), Int(w), sizes)
 end

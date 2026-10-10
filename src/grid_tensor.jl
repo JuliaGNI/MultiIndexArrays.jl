@@ -4,13 +4,13 @@
     GridTensor(tensor::MultiIndexLazyArray, w::Integer)
 
 A rank-`N` lazy array over a single grid, with a stencil of width `w`. It holds a
-[`MultiIndexLazyArray`](@ref) — the coefficient function and the grid that `size` and `getindex`
+`MultiIndexLazyArray` — the coefficient function and the grid that `size` and `getindex`
 use — and `w`, the width of the stencil that [`stencil_indices`](@ref) returns for it.
 
 The axes of `tensor` must all be the same grid, because a grid tensor has one grid, and `w` must
 be non-negative; each raises an `ArgumentError`. `GridTensor` keeps `Base`'s `OneTo` axes, so its
 indices are the linear indices of that grid, in each of the index forms that
-[`MultiIndexLazyArray`](@ref) takes. `Array(gt)` materialises it, `parent(gt)` is the array it
+`MultiIndexLazyArray` takes. `Array(gt)` materialises it, `parent(gt)` is the array it
 holds, and `gt[n]` is the `n`th entry of `Array(gt)`.
 
 ```julia
@@ -27,18 +27,19 @@ struct GridTensor{DT, N, MT <: MultiIndexLazyArray{DT, N}} <: AbstractArray{DT, 
     tensor::MT
     width::Int
 
-    # the inner constructor, so that no outer constructor without the checks below exists
-    function GridTensor{DT, N, MT}(tensor::MT, width::Int) where {DT, N,
+    # the checks live in the inner constructor, so that neither a parameterized nor an ordinary
+    # call can build a tensor over several grids, or with a negative width
+    function GridTensor{DT, N, MT}(tensor::MT, w::Integer) where {DT, N,
             MT <: MultiIndexLazyArray{DT, N}}
-        new{DT, N, MT}(tensor, width)
+        allequal(axes(tensor)) || throw(ArgumentError(
+            "a GridTensor is over one grid, but the axes of the lazy array are $(axes(tensor))"))
+        w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
+        return new{DT, N, MT}(tensor, Int(w))
     end
 end
 
 function GridTensor(tensor::MultiIndexLazyArray{DT, N}, w::Integer) where {DT, N}
-    allequal(axes(tensor)) || throw(ArgumentError(
-        "a GridTensor is over one grid, but the axes of the lazy array are $(axes(tensor))"))
-    w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
-    return GridTensor{DT, N, typeof(tensor)}(tensor, Int(w))
+    return GridTensor{DT, N, typeof(tensor)}(tensor, w)
 end
 
 Base.size(gt::GridTensor) = size(gt.tensor)

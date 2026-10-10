@@ -104,6 +104,12 @@ using Test
         @test_throws BoundsError stencil_indices(21, 1, (4, 5))
         @test_throws ArgumentError stencil_indices(1, -1, (4, 5))
 
+        # the length is an `Int`, so the widest stencil that fits in one is accepted and a wider
+        # one is refused rather than wrapped around by the arithmetic of `length`
+        @test length(stencil_indices(1, (typemax(Int) - 1) ÷ 2, (4,))) == typemax(Int)
+        @test_throws OverflowError stencil_indices(1, (typemax(Int) - 1) ÷ 2 + 1, (4,))
+        @test_throws OverflowError stencil_indices(1, typemax(Int), (1, 1))
+
         # any integer index and width; the extents stay `Int`
         @test collect(stencil_indices(Int32(7), Int32(1), (4, 5))) ==
               collect(stencil_indices(7, 1, (4, 5)))

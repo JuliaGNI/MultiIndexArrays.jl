@@ -1,32 +1,47 @@
 using MultiIndexArrays
-using MultiIndexArrays: MultiIndexLazyArray
 using Test
+
+# `Docs.hasdoc` arrives in Julia 1.11, and the floor of `[compat] julia` is 1.10, where a
+# documented binding is exactly one that `Docs.meta` holds
+function hasdoc(mod, sym)
+    return isdefined(Docs, :hasdoc) ? Docs.hasdoc(mod, sym) :
+           haskey(Docs.meta(mod), Docs.Binding(mod, sym))
+end
 
 # the cases of the stored reference data: `test/data/poisson_tensor_<DT>_<nx>x<nv>.txt`, written
 # by `test/helpers/generate_poisson_tensor_reference.jl`
 const CASES = ((Float32, 3, 4), (Float32, 4, 5), (Float64, 3, 4), (Float64, 4, 5))
 
-# Read a case into a dense `nx·nv × nx·nv × nx·nv` array: the file holds the nonzero entries of
+# The number of nonzero entries of each case, which is the number of lines of its data file: a
+# dropped line changes `ref` and the tensor together, so only a count against this constant sees a
+# truncated file.
+const ENTRIES = Dict((Float32, 3, 4) => 288, (Float32, 4, 5) => 480,
+    (Float64, 3, 4) => 288, (Float64, 4, 5) => 480)
+
+# Read a case into a dense `nx·nv × nx·nv × nx·nv` array, with the number of entries read. The
+# file holds the nonzero entries of
 # `Array(PoissonTensor(DT, nx, nv, Arakawa(nx, nv, DT(0.5), DT(0.25))))` as `<i> <j> <k> <value>`,
 # one per line, with the three indices linear on the `nx × nv` grid.
 function reference(DT, nx, nv)
     local N = nx * nv
     local ref = zeros(DT, N, N, N)
+    local entries = 0
     for line in eachline(joinpath(@__DIR__, "data", "poisson_tensor_$(DT)_$(nx)x$(nv).txt"))
         local i, j, k, value = split(line)
         ref[parse(Int, i), parse(Int, j), parse(Int, k)] = parse(DT, value)
+        entries += 1
     end
-    return ref
+    return ref, entries
 end
 
 # The tensor and the pieces its checks use. `f` closes over the local `ref` and `L`, so that
 # `@inferred` sees through it.
 function grid_tensor_case(DT, nx, nv, w)
-    local ref = reference(DT, nx, nv)
+    local (ref, entries) = reference(DT, nx, nv)
     local L = LinearIndices((nx, nv))
     local f = (I, J, K) -> ref[L[I], L[J], L[K]]
     local lazy = MultiIndexLazyArray(DT, f, (nx, nv), (nx, nv), (nx, nv))
-    return (; ref, lazy, gt = GridTensor(lazy, w), nx, nv, N = nx * nv)
+    return (; ref, entries, lazy, gt = GridTensor(lazy, w), nx, nv, N = nx * nv)
 end
 
 function check_grid_tensor(DT, nx, nv)
@@ -38,6 +53,7 @@ function check_grid_tensor(DT, nx, nv)
         @test eltype(gt) == DT
         @test size(gt) == (N, N, N)
         @test count(!iszero, ref) > 0
+        @test c.entries == ENTRIES[(DT, nx, nv)]
 
         # the entries of the moved `PoissonTensor`, exactly
         @test Array(gt) isa Array{DT, 3}
@@ -113,8 +129,20 @@ end
         local lazy = MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (3, 4), (3, 4), (3, 4))
         @test GridTensor(lazy, 0) isa GridTensor
         @test_throws ArgumentError GridTensor(lazy, -1)
-        @test_throws ArgumentError GridTensor(
-            MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (3, 4), (4, 3), (3, 4)), 1)
+
+        # three unequal axes, and two equal axes followed by a third that differs: the first two
+        # agree in the second shape, so a check that compares only them accepts it
+        for sizes in (((3, 4), (4, 3), (3, 4)), ((3, 4), (3, 4), (4, 3)))
+            @test_throws ArgumentError GridTensor(
+                MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, sizes...), 1)
+        end
+
+        # the parameterized constructor takes the same two checks
+        local unequal = MultiIndexLazyArray(
+            Float64, (I, J, K) -> 1.0, (3, 4), (4, 3), (3, 4))
+        @test_throws ArgumentError GridTensor{Float64, 3, typeof(lazy)}(lazy, -1)
+        @test_throws ArgumentError GridTensor{Float64, 3, typeof(unequal)}(unequal, 1)
+
         # the parent is a lazy array: nothing else is a grid tensor
         @test_throws MethodError GridTensor(MultiIndexArray(zeros(2, 2), (2, 2)), 1)
         @test_throws MethodError GridTensor(zeros(2, 2, 2), 1)
@@ -123,8 +151,8 @@ end
     @testset "the interface is public" begin
         @test :GridTensor in names(MultiIndexArrays)
         @test :stencil_indices in names(MultiIndexArrays)
-        @test Docs.hasdoc(MultiIndexArrays, :GridTensor)
-        @test Docs.hasdoc(MultiIndexArrays, :stencil_indices)
+        @test hasdoc(MultiIndexArrays, :GridTensor)
+        @test hasdoc(MultiIndexArrays, :stencil_indices)
     end
 
     @testset "no GridTensor method is ambiguous" begin
@@ -145,6 +173,7 @@ end
             const LAZY = MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (4, 5), (4, 5), (4, 5))
             const GT1 = GridTensor(LAZY, 1)
             const GT2 = GridTensor(LAZY, 2)
+            const GRID = CartesianIndices((4, 5))
 
             stencil1(i) = stencil_indices(i, 1, (4, 5))
             stencil2(i) = stencil_indices(i, 2, (4, 5))
@@ -154,6 +183,10 @@ end
             tensor2(i) = stencil_indices(GT2, i)
             tensorsum1(i) = sum(stencil_indices(GT1, i))
             tensorsum2(i) = sum(stencil_indices(GT2, i))
+            entry(i) = GT1[i, 3, 5]
+            entrycartesian(i) = GT1[GRID[i], GRID[3], GRID[5]]
+            entrytuple(i) = GT1[(i, 1), (3, 1), (1, 2)]
+            entrylinear(i) = GT1[i]
 
             @assert allocations(stencil1, 7) == 0 "stencil_indices(i, 1, sizes) allocated"
             @assert allocations(stencil2, 7) == 0 "stencil_indices(i, 2, sizes) allocated"
@@ -163,8 +196,15 @@ end
             @assert allocations(tensor2, 7) == 0 "stencil_indices(gt, i), w = 2, allocated"
             @assert allocations(tensorsum1, 7) == 0 "sum(stencil_indices(gt, i)), w = 1, allocated"
             @assert allocations(tensorsum2, 7) == 0 "sum(stencil_indices(gt, i)), w = 2, allocated"
+            @assert allocations(entry, 2) == 0 "gt[i, j, k] allocated"
+            @assert allocations(entrycartesian, 2) == 0 "gt[I, J, K] allocated"
+            @assert allocations(entrytuple, 2) == 0 "gt[(i, j), (j, k), (k, i)] allocated"
+            @assert allocations(entrylinear, 2) == 0 "gt[n] allocated"
             @assert collect(stencil1(7)) isa Vector{Int}
             @assert collect(stencil2(7)) isa Vector{Int}
+            # the barrier above stays silent, or it is not a barrier; this control shows it sees
+            # an allocation when there is one
+            @assert allocations(collect, stencil1(7)) > 0 "the barrier sees no allocation"
             """
         local cmd = `$(Base.julia_cmd()) --check-bounds=auto --project=$(Base.active_project()) -e $prog`
         @test success(cmd)
