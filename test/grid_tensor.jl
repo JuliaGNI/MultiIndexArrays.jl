@@ -19,9 +19,8 @@ function grid_tensor_case(DT, sizes, w)
     local z = zero(DT)
     local lin = I -> I[1] + nx * (I[2] - 1)
     local f = (I, J, K) -> z + (lin(I) + 100 * lin(J) + 10_000 * lin(K))
-    local lazy = MultiIndexLazyArray(DT, f, sizes, sizes, sizes)
     local expected = [DT(i + 100j + 10_000k) for i in 1:N, j in 1:N, k in 1:N]
-    return (; lazy, gt = GridTensor(lazy, w), expected, N)
+    return (; f, gt = GridTensor{DT, 3}(f, sizes, w), expected, N)
 end
 
 function check_grid_tensor(DT, sizes)
@@ -49,15 +48,14 @@ function check_grid_tensor(DT, sizes)
         @test_throws BoundsError gt[1, 0, 1]
 
         # the locality interface: the tensor's own width and grid
-        @test size(axes(parent(gt), 1)) == (nx, nv)
         for w in (1, 2)
-            local t = GridTensor(c.lazy, w)
+            local t = GridTensor{DT, 3}(c.f, sizes, w)
             for i in 1:N
                 @test collect(stencil_indices(t, i)) ==
                       collect(stencil_indices(i, w, sizes))
             end
         end
-        @test collect(stencil_indices(GridTensor(c.lazy, 0), 7)) == [7]
+        @test collect(stencil_indices(GridTensor{DT, 3}(c.f, sizes, 0), 7)) == [7]
 
         # the type is stable
         @test @inferred(size(gt)) == (N, N, N)
@@ -72,8 +70,8 @@ function check_grid_tensor(DT, sizes)
 
         # an `Int32` index and an `Int32` width, and a width that is not part of equality
         @test gt[Int32(2), Int32(3), Int32(5)] == gt[2, 3, 5]
-        @test typeof(GridTensor(c.lazy, Int32(1))) == typeof(gt)
-        @test gt == GridTensor(c.lazy, 2)
+        @test typeof(GridTensor{DT, 3}(c.f, sizes, Int32(1))) == typeof(gt)
+        @test gt == GridTensor{DT, 3}(c.f, sizes, 2)
     end
     return nothing
 end
@@ -85,8 +83,7 @@ end
     end
 
     @testset "an entry has the element type, whatever the coefficient function returns" begin
-        local gt = GridTensor(
-            MultiIndexLazyArray(Float32, (I, J, K) -> 0.1, (2, 3), (2, 3), (2, 3)), 1)
+        local gt = GridTensor{Float32, 3}((I, J, K) -> 0.1, (2, 3), 1)
         local I = CartesianIndex(1, 2)
         @test gt[1, 2, 3] isa Float32
         @test gt[I, I, I] isa Float32
@@ -96,26 +93,9 @@ end
     end
 
     @testset "the constructor checks its arguments" begin
-        local lazy = MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (3, 4), (3, 4), (3, 4))
-        @test GridTensor(lazy, 0) isa GridTensor
-        @test_throws ArgumentError GridTensor(lazy, -1)
-
-        # three unequal axes, and two equal axes followed by a third that differs: the first two
-        # agree in the second shape, so a check that compares only them accepts it
-        for sizes in (((3, 4), (4, 3), (3, 4)), ((3, 4), (3, 4), (4, 3)))
-            @test_throws ArgumentError GridTensor(
-                MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, sizes...), 1)
-        end
-
-        # the parameterized constructor takes the same two checks
-        local unequal = MultiIndexLazyArray(
-            Float64, (I, J, K) -> 1.0, (3, 4), (4, 3), (3, 4))
-        @test_throws ArgumentError GridTensor{Float64, 3, typeof(lazy)}(lazy, -1)
-        @test_throws ArgumentError GridTensor{Float64, 3, typeof(unequal)}(unequal, 1)
-
-        # the parent is a lazy array: nothing else is a grid tensor
-        @test_throws MethodError GridTensor(MultiIndexArray(zeros(2, 2), (2, 2)), 1)
-        @test_throws MethodError GridTensor(zeros(2, 2, 2), 1)
+        local f = (I, J, K) -> 1.0
+        @test GridTensor{Float64, 3}(f, (3, 4), 0) isa GridTensor
+        @test_throws ArgumentError GridTensor{Float64, 3}(f, (3, 4), -1)
     end
 
     @testset "the interface is public" begin
@@ -143,9 +123,8 @@ end
 
             Base.JLOptions().check_bounds == 0 || error("this program measures allocations")
 
-            const LAZY = MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (4, 5), (4, 5), (4, 5))
-            const GT1 = GridTensor(LAZY, 1)
-            const GT2 = GridTensor(LAZY, 2)
+            const GT1 = GridTensor{Float64, 3}((I, J, K) -> 1.0, (4, 5), 1)
+            const GT2 = GridTensor{Float64, 3}((I, J, K) -> 1.0, (4, 5), 2)
             const GRID = CartesianIndices((4, 5))
 
             for (label, f, a) in (

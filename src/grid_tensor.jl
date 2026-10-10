@@ -1,20 +1,18 @@
 ### Grid Tensor
 
 """
-    GridTensor(tensor::MultiIndexLazyArray, w::Integer)
+    GridTensor{DT, N}(f, sizes::NTuple{D, Int}, w::Integer)
 
-A rank-`N` lazy array over a single grid, with a stencil of width `w`. It holds a
-`MultiIndexLazyArray` — the coefficient function and the grid that `size` and `getindex`
-use — and `w`, the width of the stencil that [`stencil_indices`](@ref) returns for it.
+A rank-`N` lazy array over the single grid of extents `sizes`, with a stencil of width `w`. Each
+index of `gt[i, j, k]` is a node of the grid, given as its linear index, its `CartesianIndex` or
+its tuple of coordinates, and the entry is `f(I, J, K)` of the `CartesianIndex`es of the nodes,
+converted to `DT`. A negative `w` raises an `ArgumentError`.
 
-The axes of `tensor` must all be the same grid, because a grid tensor has one grid, and `w` must
-be non-negative; each raises an `ArgumentError`. `GridTensor` keeps `Base`'s `OneTo` axes, so its
-indices are the linear indices of that grid, in each of the index forms that
-`MultiIndexLazyArray` takes. `Array(gt)` materialises it, `parent(gt)` is the array it
-holds, and `gt[n]` is the `n`th entry of `Array(gt)`.
+`size(gt)` is `(n, …, n)` for the `n` nodes of the grid, `Array(gt)` materialises it, and
+[`stencil_indices`](@ref) returns the stencil of width `w` around a node.
 
 ```julia
-julia> gt = GridTensor(MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (2, 3), (2, 3), (2, 3)), 1);
+julia> gt = GridTensor{Float64, 3}((I, J, K) -> 1.0, (2, 3), 1);
 
 julia> size(gt)
 (6, 6, 6)
@@ -23,37 +21,29 @@ julia> gt[1, 2, 3]
 1.0
 ```
 """
-struct GridTensor{DT, N, MT <: MultiIndexLazyArray{DT, N}} <: AbstractArray{DT, N}
-    tensor::MT
+struct GridTensor{DT, N, F, D} <: AbstractArray{DT, N}
+    f::F
+    grid::CartesianIndices{D, NTuple{D, Base.OneTo{Int}}}
     width::Int
 
-    # the checks live in the inner constructor, so that neither a parameterized nor an ordinary
-    # call can build a tensor over several grids, or with a negative width
-    function GridTensor{DT, N, MT}(tensor::MT, w::Integer) where {DT, N,
-            MT <: MultiIndexLazyArray{DT, N}}
-        allequal(axes(tensor)) || throw(ArgumentError(
-            "a GridTensor is over one grid, but its axes have the sizes $(map(size, axes(tensor)))"))
+    function GridTensor{DT, N}(f, sizes::NTuple{D, Int}, w::Integer) where {DT, N, D}
         w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
-        return new{DT, N, MT}(tensor, Int(w))
+        return new{DT, N, typeof(f), D}(f, CartesianIndices(sizes), Int(w))
     end
 end
 
-function GridTensor(tensor::MultiIndexLazyArray{DT, N}, w::Integer) where {DT, N}
-    return GridTensor{DT, N, typeof(tensor)}(tensor, w)
-end
+Base.size(gt::GridTensor{DT, N}) where {DT, N} = ntuple(_ -> length(gt.grid), Val(N))
 
-Base.size(gt::GridTensor) = size(gt.tensor)
+# The node of an index, in each of its three forms; a node off the grid raises a `BoundsError`.
+_node(grid::CartesianIndices, i::Integer) = grid[i]
+_node(grid::CartesianIndices, I::CartesianIndex) = (checkbounds(grid, I); I)
+_node(grid::CartesianIndices, I::Tuple) = _node(grid, CartesianIndex(I))
 
-Base.parent(gt::GridTensor) = gt.tensor
-
-# One method takes all three index forms of the lazy array, so that no two methods tie at `N = 0`;
-# a call uses one form for all its indices. `AbstractArray` answers a single linear index itself.
-# The entry is converted to `DT`, because the coefficient function may return another type.
-Base.@propagate_inbounds function Base.getindex(gt::GridTensor{DT, N},
+# One method takes the three index forms, so that no two methods tie at `N = 0`. `AbstractArray`
+# answers a single linear index itself.
+function Base.getindex(gt::GridTensor{DT, N},
         inds::Vararg{Union{CartesianIndex, Tuple, Integer}, N}) where {DT, N}
-    convert(DT, parent(gt)[inds...])
+    return convert(DT, gt.f(map(i -> _node(gt.grid, i), inds)...))
 end
 
-function stencil_indices(gt::GridTensor, i::Integer)
-    stencil_indices(i, gt.width, size(axes(parent(gt), 1)))
-end
+stencil_indices(gt::GridTensor, i::Integer) = stencil_indices(i, gt.width, size(gt.grid))
