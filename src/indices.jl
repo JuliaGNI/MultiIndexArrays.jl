@@ -42,13 +42,13 @@ function _stencil_indices(i::Int, w::Int, nx, nv)
     return indices
 end
 
-# The stencil is a lazy iterator: it holds the Cartesian index of the centre, the width, the
-# extents of the grid and the number of entries, and it computes one neighbour per `iterate`, so a
-# call allocates nothing.
+# The stencil is a lazy iterator: it holds the Cartesian index of the centre, the extents of the
+# grid, the offsets `(-w):w` per direction and the number of entries, and it computes one neighbour
+# per `iterate`, so a call allocates nothing.
 struct StencilIndices{D}
     centre::CartesianIndex{D}
-    width::Int
     sizes::NTuple{D, Int}
+    offsets::CartesianIndices{D, NTuple{D, UnitRange{Int}}}
     length::Int
 end
 
@@ -69,37 +69,14 @@ end
 # off the grid.
 @inline _wrap(x::Int, n::Int) = 1 ≤ x ≤ n ? x : mod1(x, n)
 
-# The linear index of the neighbour at the offset `offs`, whose every component the periodic grid
-# wraps back into it. The first dimension runs fastest, as `LinearIndices` has it.
-@inline function _stencil_index(s::StencilIndices{D}, offs::NTuple{D, Int}) where {D}
-    index, stride = 1, 1
-    @inbounds for d in 1:D
-        index += (_wrap(s.centre[d] + offs[d], s.sizes[d]) - 1) * stride
-        stride *= s.sizes[d]
-    end
-    return index
-end
-
-# The next offset in the order of `(-w):w` per direction, the first direction outermost: step the
-# last direction that has not reached `w`, and start the directions after it again at `-w`. The
-# offset after the last one is `nothing`.
-@inline function _next_offset(offs::NTuple{D, Int}, w::Int) where {D}
-    for d in D:-1:1
-        offs[d] < w || continue
-        return ntuple(i -> i < d ? offs[i] : (i == d ? offs[d] + 1 : -w), Val(D))
-    end
-    return nothing
-end
-
-function Base.iterate(s::StencilIndices{D}) where {D}
-    offs = ntuple(_ -> -s.width, Val(D))
-    return _stencil_index(s, offs), offs
-end
-
-function Base.iterate(s::StencilIndices{D}, offs::NTuple{D, Int}) where {D}
-    next = _next_offset(offs, s.width)
+# `CartesianIndices` runs its first component fastest, so the reversed offset makes the first
+# direction outermost. The neighbour wraps around the grid, and its linear index runs the first
+# dimension fastest, as `LinearIndices` has it.
+function Base.iterate(s::StencilIndices, state...)
+    next = iterate(s.offsets, state...)
     next === nothing && return nothing
-    return _stencil_index(s, next), next
+    neighbour = map(_wrap, Tuple(s.centre) .+ reverse(Tuple(next[1])), s.sizes)
+    return @inbounds(LinearIndices(s.sizes)[neighbour...]), next[2]
 end
 
 """
@@ -123,5 +100,6 @@ true
 """
 function stencil_indices(i::Integer, w::Integer, sizes::NTuple{D, Int}) where {D}
     w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
-    return StencilIndices(multiindex(i, sizes), Int(w), sizes, _stencil_length(Int(w), D))
+    offsets = CartesianIndices(ntuple(_ -> (-Int(w)):Int(w), Val(D)))
+    return StencilIndices(multiindex(i, sizes), sizes, offsets, _stencil_length(Int(w), D))
 end
