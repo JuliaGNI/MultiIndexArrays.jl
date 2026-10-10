@@ -35,6 +35,7 @@ mila = MultiIndexLazyArray(T, f, (nx,), (nv,))
 @test size(mila) == (nx, nv)
 @test size(mila, 1) == nx
 @test size(mila, 2) == nv
+@test @inferred(size(mila)) == (nx, nv)
 
 mia = Base.materialize(mila)
 
@@ -58,6 +59,7 @@ mila = MultiIndexLazyArray(T, _f, (nx, nv))
 
 @test size(mila) == (nx*nv,)
 @test size(mila, 1) == nx*nv
+@test @inferred(size(mila)) == (nx*nv,)
 
 # __parent = vec(_parent)
 

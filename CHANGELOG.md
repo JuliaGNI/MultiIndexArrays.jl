@@ -12,6 +12,27 @@ loses the reasoning that makes it worth keeping.
 
 ## [Unreleased]
 
+### New Features
+
+- **`GridTensor`, a lazy grid tensor with a stencil width.** `GridTensor(tensor, w)` wraps a
+  rank-`N` `MultiIndexLazyArray` over one grid, and a stencil width `w`, as an
+  `AbstractArray{DT, N}` with `Base`'s `OneTo` axes. `size`, `getindex` (in each of the three index
+  forms of the lazy array, and by linear index), `parent` and `Array` work on it. The constructor
+  raises `ArgumentError` when the axes of the lazy array are not all the same grid, or when `w` is
+  negative.
+
+- **`stencil_indices`, the periodic stencil as a lazy iterator.** `stencil_indices(i, w, sizes)`
+  and `stencil_indices(gt, i)` return an iterator over the `(2w+1)^D` linear indices of the
+  periodic stencil of width `w` around node `i`, the first direction outermost. It allocates
+  nothing. The older `_stencil_indices` stays internal and 2-D only, and the sibling packages keep
+  importing it by name.
+
+### Bug Fixes
+
+- **`size` of a `MultiIndexLazyArray` infers.** `size(mila)` now returns `map(length, mila.axes)`
+  rather than a generator's tuple, so `@inferred size(mila)` passes where its return type was
+  `Tuple{Vararg{Int}}`. The sizes it returns are unchanged.
+
 ### Changed
 
 - **CI coverage and cache.** CI uploads coverage from the `Julia 1 - ubuntu-latest` job instead of `Julia min`, and a test job saves the Julia cache only when it succeeds.

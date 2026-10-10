@@ -30,7 +30,7 @@ end
 Base.axes(mila::MultiIndexLazyArray) = mila.axes
 Base.axes(mila::MultiIndexLazyArray, i) = mila.axes[i]
 
-Base.size(mila::MultiIndexLazyArray) = Tuple(length(ax) for ax in mila.axes)
+Base.size(mila::MultiIndexLazyArray) = map(length, mila.axes)
 Base.size(mila::MultiIndexLazyArray, i) = length(mila.axes[i])
 
 _checkaxis(ax::MultiIndexAxis, I::CartesianIndex) = I in ax.cartes_indices

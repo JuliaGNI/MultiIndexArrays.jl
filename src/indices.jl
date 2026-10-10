@@ -41,3 +41,65 @@ function _stencil_indices(i::Int, w::Int, nx, nv)
     end
     return indices
 end
+
+# The stencil is a lazy iterator: it holds the Cartesian index of the centre, the extents of the
+# grid, the offsets `(-w):w` per direction and the number of entries, and it computes one neighbour
+# per `iterate`, so a call allocates nothing.
+struct StencilIndices{D}
+    centre::CartesianIndex{D}
+    sizes::NTuple{D, Int}
+    offsets::CartesianIndices{D, NTuple{D, UnitRange{Int}}}
+    length::Int
+end
+
+Base.length(s::StencilIndices) = s.length
+Base.eltype(::Type{<:StencilIndices}) = Int
+
+# The number of entries, `(2w+1)^D`, in checked arithmetic: `length` returns an `Int`, so a stencil
+# with more entries than `typemax(Int)` is refused at construction rather than wrapped around.
+function _stencil_length(w::Int, D::Int)
+    n = 1
+    for _ in 1:D
+        n = Base.Checked.checked_mul(n, Base.Checked.checked_add(Base.Checked.checked_mul(w, 2), 1))
+    end
+    return n
+end
+
+# `x` wrapped periodically into `1:n`. The division in `mod1` runs only for a neighbour that lies
+# off the grid.
+@inline _wrap(x::Int, n::Int) = 1 ≤ x ≤ n ? x : mod1(x, n)
+
+# `CartesianIndices` runs its first component fastest, so the reversed offset makes the first
+# direction outermost. The neighbour wraps around the grid, and its linear index runs the first
+# dimension fastest, as `LinearIndices` has it.
+function Base.iterate(s::StencilIndices, state...)
+    next = iterate(s.offsets, state...)
+    next === nothing && return nothing
+    neighbour = map(_wrap, Tuple(s.centre) .+ reverse(Tuple(next[1])), s.sizes)
+    return @inbounds(LinearIndices(s.sizes)[neighbour...]), next[2]
+end
+
+"""
+    stencil_indices(i::Integer, w::Integer, sizes::NTuple{D, Int})
+    stencil_indices(gt::GridTensor, i::Integer)
+
+The linear indices of the periodic stencil of width `w` around the linear index `i`, as a lazy
+iterator of `(2w+1)^D` entries on the grid of extents `sizes`. The offsets run over `(-w):w` in
+each direction, the first direction outermost and the last innermost, and each one wraps around
+the grid, so a neighbour of a node on an edge is a node on the opposite edge. The first dimension
+of the grid runs fastest, as it does for [`multiindex`](@ref). An `i` outside the grid raises a
+`BoundsError`, and a negative `w` an `ArgumentError`.
+
+`stencil_indices(gt, i)` is the stencil of the width and on the grid of the
+[`GridTensor`](@ref) `gt`.
+
+```julia
+julia> collect(stencil_indices(1, 1, (2, 3))) == [6, 2, 4, 5, 1, 3, 6, 2, 4]
+true
+```
+"""
+function stencil_indices(i::Integer, w::Integer, sizes::NTuple{D, Int}) where {D}
+    w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
+    offsets = CartesianIndices(ntuple(_ -> (-Int(w)):Int(w), Val(D)))
+    return StencilIndices(multiindex(i, sizes), sizes, offsets, _stencil_length(Int(w), D))
+end

@@ -10,5 +10,9 @@ export MultiIndexArray
 export MultiIndexLazyArray
 
 include("indices.jl")
+include("grid_tensor.jl")
+
+export GridTensor
+export stencil_indices
 
 end
