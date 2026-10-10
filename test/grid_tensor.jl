@@ -42,6 +42,7 @@ function check_grid_tensor(DT, nx, nv)
         # the entries of the moved `PoissonTensor`, exactly
         @test Array(gt) isa Array{DT, 3}
         @test Array(gt) == ref
+        @test Base.materialize(gt) isa MultiIndexArray
         @test parent(Base.materialize(gt)) == ref
 
         # the three index forms agree, and each one throws off the grid
@@ -114,6 +115,9 @@ end
         @test_throws ArgumentError GridTensor(lazy, -1)
         @test_throws ArgumentError GridTensor(
             MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (3, 4), (4, 3), (3, 4)), 1)
+        # the parent is a lazy array: nothing else is a grid tensor
+        @test_throws MethodError GridTensor(MultiIndexArray(zeros(2, 2), (2, 2)), 1)
+        @test_throws MethodError GridTensor(zeros(2, 2, 2), 1)
     end
 
     @testset "the interface is public" begin
