@@ -56,7 +56,7 @@ in `src/multi_index_lazy_array.jl` survives the test suite.
   Some tests did not pass: 9 passed, 0 failed, 1 errored, 1 broken.
   ```
 
-  Fixing the four methods of issue #4 and dropping the mark closes it; `broken = false` alone
-  turns the required jobs red.
+  A check that fails on some Julia versions only takes `false`, not a `broken` mark:
+  `unbound_args = false,  # issue #4`. Fixing the four methods of issue #4 removes the entry too.
 - kind: defect
 - found: #13
