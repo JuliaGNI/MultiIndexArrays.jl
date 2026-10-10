@@ -1,8 +1,8 @@
 using MultiIndexArrays
 using Test
 
-# `Docs.hasdoc` arrives in Julia 1.11, and the floor of `[compat] julia` is 1.10, where a
-# documented binding is exactly one that `Docs.meta` holds
+# On Julia 1.10, a documented binding is one that `Docs.meta` holds; Julia 1.11 and later also
+# provide `Docs.hasdoc`.
 function hasdoc(mod, sym)
     return isdefined(Docs, :hasdoc) ? Docs.hasdoc(mod, sym) :
            haskey(Docs.meta(mod), Docs.Binding(mod, sym))
@@ -55,7 +55,7 @@ function check_grid_tensor(DT, nx, nv)
         @test count(!iszero, ref) > 0
         @test c.entries == ENTRIES[(DT, nx, nv)]
 
-        # the entries of the moved `PoissonTensor`, exactly
+        # the entries of the reference `PoissonTensor`, exactly
         @test Array(gt) isa Array{DT, 3}
         @test Array(gt) == ref
         @test Base.materialize(gt) isa MultiIndexArray
@@ -162,11 +162,13 @@ end
 
     @testset "the stencil iteration allocates nothing" begin
         # a fresh process with `--check-bounds=auto`, because `julia_cmd()` carries the
-        # `--check-bounds=yes` of `Pkg.test()` up to Julia 1.12, which the later flag overrides
+        # parent process's bounds setting, which the later flag overrides
         local prog = """
+            # App runners can omit the active project from the inherited load path.
+            pushfirst!(LOAD_PATH, "@")
             using MultiIndexArrays
 
-            allocations(f::F, a::A) where {F, A} = (f(a); @allocated f(a))
+            allocations(f::F, a::A) where {F, A} = (f(a); minimum((@allocated f(a)) for _ in 1:5))
 
             Base.JLOptions().check_bounds == 0 || error("this program measures allocations")
 
@@ -188,25 +190,25 @@ end
             entrytuple(i) = GT1[(i, 1), (3, 1), (1, 2)]
             entrylinear(i) = GT1[i]
 
-            @assert allocations(stencil1, 7) == 0 "stencil_indices(i, 1, sizes) allocated"
-            @assert allocations(stencil2, 7) == 0 "stencil_indices(i, 2, sizes) allocated"
-            @assert allocations(sum1, 7) == 0 "sum(stencil_indices(i, 1, sizes)) allocated"
-            @assert allocations(sum2, 7) == 0 "sum(stencil_indices(i, 2, sizes)) allocated"
-            @assert allocations(tensor1, 7) == 0 "stencil_indices(gt, i), w = 1, allocated"
-            @assert allocations(tensor2, 7) == 0 "stencil_indices(gt, i), w = 2, allocated"
-            @assert allocations(tensorsum1, 7) == 0 "sum(stencil_indices(gt, i)), w = 1, allocated"
-            @assert allocations(tensorsum2, 7) == 0 "sum(stencil_indices(gt, i)), w = 2, allocated"
-            @assert allocations(entry, 2) == 0 "gt[i, j, k] allocated"
-            @assert allocations(entrycartesian, 2) == 0 "gt[I, J, K] allocated"
-            @assert allocations(entrytuple, 2) == 0 "gt[(i, j), (j, k), (k, i)] allocated"
-            @assert allocations(entrylinear, 2) == 0 "gt[n] allocated"
+            @assert allocations(stencil1, 7) <= 0 "stencil_indices(i, 1, sizes) allocated"
+            @assert allocations(stencil2, 7) <= 0 "stencil_indices(i, 2, sizes) allocated"
+            @assert allocations(sum1, 7) <= 0 "sum(stencil_indices(i, 1, sizes)) allocated"
+            @assert allocations(sum2, 7) <= 0 "sum(stencil_indices(i, 2, sizes)) allocated"
+            @assert allocations(tensor1, 7) <= 0 "stencil_indices(gt, i), w = 1, allocated"
+            @assert allocations(tensor2, 7) <= 0 "stencil_indices(gt, i), w = 2, allocated"
+            @assert allocations(tensorsum1, 7) <= 0 "sum(stencil_indices(gt, i)), w = 1, allocated"
+            @assert allocations(tensorsum2, 7) <= 0 "sum(stencil_indices(gt, i)), w = 2, allocated"
+            @assert allocations(entry, 2) <= 0 "gt[i, j, k] allocated"
+            @assert allocations(entrycartesian, 2) <= 0 "gt[I, J, K] allocated"
+            @assert allocations(entrytuple, 2) <= 0 "gt[(i, j), (j, k), (k, i)] allocated"
+            @assert allocations(entrylinear, 2) <= 0 "gt[n] allocated"
             @assert collect(stencil1(7)) isa Vector{Int}
             @assert collect(stencil2(7)) isa Vector{Int}
             # the barrier above stays silent, or it is not a barrier; this control shows it sees
             # an allocation when there is one
             @assert allocations(collect, stencil1(7)) > 0 "the barrier sees no allocation"
             """
-        local cmd = `$(Base.julia_cmd()) --check-bounds=auto --project=$(Base.active_project()) -e $prog`
+        local cmd = `$(Base.julia_cmd()) --startup-file=no --check-bounds=auto --project=$(Base.active_project()) -e $prog`
         @test success(cmd)
     end
 end

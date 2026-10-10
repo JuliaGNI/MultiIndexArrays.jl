@@ -86,7 +86,7 @@ using Test
     end
 
     @testset "stencil_indices agrees with _stencil_indices entry by entry" begin
-        # every node and width on two non-square grids, in the old function's order: the first
+        # every node and width on two non-square grids, in `_stencil_indices`' order: the first
         # offset outermost and the second innermost, so a swapped loop order fails here
         for (nx, nv) in ((4, 5), (5, 3)), w in 0:2, i in 1:(nx * nv)
             @test collect(stencil_indices(i, w, (nx, nv))) == _stencil_indices(i, w, nx, nv)
@@ -104,11 +104,12 @@ using Test
         @test_throws BoundsError stencil_indices(21, 1, (4, 5))
         @test_throws ArgumentError stencil_indices(1, -1, (4, 5))
 
-        # the length is an `Int`, so the widest stencil that fits in one is accepted and a wider
-        # one is refused rather than wrapped around by the arithmetic of `length`
-        @test length(stencil_indices(1, (typemax(Int) - 1) ÷ 2, (4,))) == typemax(Int)
-        @test_throws OverflowError stencil_indices(1, (typemax(Int) - 1) ÷ 2 + 1, (4,))
-        @test_throws OverflowError stencil_indices(1, typemax(Int), (1, 1))
+        # the length is an `Int`, so the widest two-dimensional stencil that fits in one is
+        # accepted and a wider one is refused rather than wrapped around by `length`
+        local widest = (isqrt(typemax(Int)) - 1) ÷ 2
+        @test length(stencil_indices(1, widest, (4, 5))) == (2 * widest + 1)^2
+        @test_throws OverflowError stencil_indices(1, widest + 1, (4, 5))
+        @test_throws OverflowError stencil_indices(1, typemax(Int), (4, 5))
 
         # any integer index and width; the extents stay `Int`
         @test collect(stencil_indices(Int32(7), Int32(1), (4, 5))) ==

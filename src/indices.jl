@@ -54,12 +54,12 @@ Base.length(s::StencilIndices{D}) where {D} = (2 * s.width + 1)^D
 Base.eltype(::Type{<:StencilIndices}) = Int
 Base.IteratorSize(::Type{<:StencilIndices}) = Base.HasLength()
 
-# The length above, in checked arithmetic: `length` returns an `Int`, so a width whose stencil
-# holds more entries than one is refused at construction rather than wrapped around by it.
+# The length above, in checked arithmetic: `length` returns an `Int`, so a stencil with more
+# entries than `typemax(Int)` is refused at construction rather than wrapped around by it.
 function _stencil_length(w::Int, D::Int)
     local n = 1
     for _ in 1:D
-        n = Base.checked_mul(n, Base.checked_add(Base.checked_mul(w, 2), 1))
+        n = Base.Checked.checked_mul(n, Base.Checked.checked_add(Base.Checked.checked_mul(w, 2), 1))
     end
     return n
 end
