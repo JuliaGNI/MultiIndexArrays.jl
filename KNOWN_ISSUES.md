@@ -30,3 +30,33 @@ in `src/multi_index_lazy_array.jl` survives the test suite.
   ```
 - kind: defect
 - found: 2026-10-10
+
+### K2 · `_stencil_indices` builds a second, allocating copy of the stencil.
+
+- location: `src/indices.jl:33`
+- evidence: `_stencil_indices(i, w, nx, nv)` fills a fresh `Vector{Int}` of `(2w+1)^2` entries with
+  `zeros` on every call, while `stencil_indices` iterates the same stencil lazily and without
+  allocation. ReducedBasisMethods (`src/reduced_tensor.jl:27`) and VlasovMethods
+  (`src/gridbased/reduced_tensors.jl:47,103,151,209`) import `_stencil_indices` and call it inside
+  their loops, so a fix changes their call sites too.
+- kind: defect
+- found: #13
+
+### K3 · The Aqua `unbound_args` mark fails the nightly job as an unexpected pass.
+
+- location: `test/quality/aqua.jl:7`
+- evidence: `unbound_args = (broken = true,)` records issue #4, and the mark holds on `min`, `1`
+  and `pre`. On nightly Aqua finds no unbound type parameters, so the job fails
+  (CI run 37980393359 on `9ff99f2`):
+
+  ```
+  Unbound type parameters: Error During Test at …/Aqua/yUvBM/src/unbound_args.jl:25
+   Unexpected Pass
+   Expression: isempty(unbounds)
+  Some tests did not pass: 9 passed, 0 failed, 1 errored, 1 broken.
+  ```
+
+  Fixing the four methods of issue #4 and dropping the mark closes it; `broken = false` alone
+  turns the required jobs red.
+- kind: defect
+- found: #13
