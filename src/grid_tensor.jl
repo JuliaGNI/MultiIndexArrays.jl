@@ -32,7 +32,7 @@ struct GridTensor{DT, N, MT <: MultiIndexLazyArray{DT, N}} <: AbstractArray{DT, 
     function GridTensor{DT, N, MT}(tensor::MT, w::Integer) where {DT, N,
             MT <: MultiIndexLazyArray{DT, N}}
         allequal(axes(tensor)) || throw(ArgumentError(
-            "a GridTensor is over one grid, but the axes of the lazy array are $(axes(tensor))"))
+            "a GridTensor is over one grid, but its axes have the sizes $(map(size, axes(tensor)))"))
         w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
         return new{DT, N, MT}(tensor, Int(w))
     end
@@ -48,11 +48,12 @@ Base.parent(gt::GridTensor) = gt.tensor
 
 Base.materialize(gt::GridTensor) = Base.materialize(parent(gt))
 
-# one method for all three index forms, so that no pair of them ties at `N = 0`, and one index
-# for a linear index into `Array(gt)`, which `AbstractArray` answers itself
+# One method takes all three index forms of the lazy array, so that no two methods tie at `N = 0`;
+# a call uses one form for all its indices. `AbstractArray` answers a single linear index itself.
+# The entry is converted to `DT`, because the coefficient function may return another type.
 Base.@propagate_inbounds function Base.getindex(gt::GridTensor{DT, N},
         inds::Vararg{Union{CartesianIndex, Tuple, Integer}, N}) where {DT, N}
-    parent(gt)[inds...]
+    convert(DT, parent(gt)[inds...])
 end
 
 function stencil_indices(gt::GridTensor, i::Integer)

@@ -25,8 +25,8 @@ in `src/multi_index_lazy_array.jl` survives the test suite.
   ERROR: MethodError: no method matching MultiIndexLazyArray(::Type{Float64}, ::Pairs, ::Tuple{Int64, Int64}, ::Tuple{Int64, Int64}, ::Tuple{Int64, Int64})
     Closest candidates are:
       MultiIndexLazyArray(::Any, !Matched::Union{Function, Type}, ::NTuple{M, Int64}...) where {N, M}
-  julia> MultiIndexLazyArray(Float64, (I, J, K) -> Float64(I + J + K), (3, 4), (3, 4), (3, 4))
-  MultiIndexLazyArray{Float64, 3, var"#1#2", NTuple{3, MultiIndexAxis}}
+  julia> MultiIndexLazyArray(Float64, (I, J, K) -> Float64(I + J + K), (3, 4), (3, 4), (3, 4)) isa MultiIndexLazyArray
+  true
   ```
 - kind: defect
 - found: 2026-10-10

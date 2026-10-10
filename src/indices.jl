@@ -42,34 +42,39 @@ function _stencil_indices(i::Int, w::Int, nx, nv)
     return indices
 end
 
-# The stencil is a lazy iterator: it holds the Cartesian index of the centre, the width and the
-# extents of the grid, and it computes one neighbour per `iterate`, so a call allocates nothing.
+# The stencil is a lazy iterator: it holds the Cartesian index of the centre, the width, the
+# extents of the grid and the number of entries, and it computes one neighbour per `iterate`, so a
+# call allocates nothing.
 struct StencilIndices{D}
     centre::CartesianIndex{D}
     width::Int
     sizes::NTuple{D, Int}
+    length::Int
 end
 
-Base.length(s::StencilIndices{D}) where {D} = (2 * s.width + 1)^D
+Base.length(s::StencilIndices) = s.length
 Base.eltype(::Type{<:StencilIndices}) = Int
-Base.IteratorSize(::Type{<:StencilIndices}) = Base.HasLength()
 
-# The length above, in checked arithmetic: `length` returns an `Int`, so a stencil with more
-# entries than `typemax(Int)` is refused at construction rather than wrapped around by it.
+# The number of entries, `(2w+1)^D`, in checked arithmetic: `length` returns an `Int`, so a stencil
+# with more entries than `typemax(Int)` is refused at construction rather than wrapped around.
 function _stencil_length(w::Int, D::Int)
-    local n = 1
+    n = 1
     for _ in 1:D
         n = Base.Checked.checked_mul(n, Base.Checked.checked_add(Base.Checked.checked_mul(w, 2), 1))
     end
     return n
 end
 
+# `x` wrapped periodically into `1:n`. The division in `mod1` runs only for a neighbour that lies
+# off the grid.
+@inline _wrap(x::Int, n::Int) = 1 ≤ x ≤ n ? x : mod1(x, n)
+
 # The linear index of the neighbour at the offset `offs`, whose every component the periodic grid
 # wraps back into it. The first dimension runs fastest, as `LinearIndices` has it.
 @inline function _stencil_index(s::StencilIndices{D}, offs::NTuple{D, Int}) where {D}
     index, stride = 1, 1
     @inbounds for d in 1:D
-        index += (mod1(s.centre[d] + offs[d], s.sizes[d]) - 1) * stride
+        index += (_wrap(s.centre[d] + offs[d], s.sizes[d]) - 1) * stride
         stride *= s.sizes[d]
     end
     return index
@@ -118,6 +123,5 @@ true
 """
 function stencil_indices(i::Integer, w::Integer, sizes::NTuple{D, Int}) where {D}
     w ≥ 0 || throw(ArgumentError("the stencil width must be non-negative, got $w"))
-    _stencil_length(Int(w), D)   # refused here, not wrapped around by `Base.length`
-    return StencilIndices(multiindex(i, sizes), Int(w), sizes)
+    return StencilIndices(multiindex(i, sizes), Int(w), sizes, _stencil_length(Int(w), D))
 end

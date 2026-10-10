@@ -16,9 +16,7 @@ loses the reasoning that makes it worth keeping.
 
 - **`GridTensor`, a lazy grid tensor with a stencil width.** `GridTensor(tensor, w)` wraps a
   rank-`N` `MultiIndexLazyArray` over one grid, and a stencil width `w`, as an
-  `AbstractArray{DT, N}` with `Base`'s `OneTo` axes. It reproduces the entries of `PoissonTensor`
-  in GeometricBrackets 0.1.2, the grid-based bracket tensor that `ReducedBasisMethods` defined
-  before the split; this package owns the general part of that type. `size`, `getindex` in each
+  `AbstractArray{DT, N}` with `Base`'s `OneTo` axes. `size`, `getindex` in each
   of the three index forms of the lazy array and by linear index, `parent`, `Base.materialize` and
   `Array` work on it. The constructor raises `ArgumentError` when the axes of the lazy array are
   not all the same grid, or when `w` is negative.

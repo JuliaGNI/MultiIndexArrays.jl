@@ -125,6 +125,35 @@ end
         check_grid_tensor(DT, nx, nv)
     end
 
+    # Every entry is distinct and exact in `Float32`, so a permuted, shifted or reflected index map
+    # changes the result; the reference data above is invariant under each of these.
+    @testset "the index map, on distinct entries: $DT on $sizes" for DT in (Float32, Float64),
+        sizes in ((3, 4), (4, 5))
+
+        local L = LinearIndices(sizes)
+        local N = prod(sizes)
+        local grid = CartesianIndices(sizes)
+        local f = (I, J, K) -> DT(L[I] + 100 * L[J] + 10_000 * L[K])
+        local gt = GridTensor(MultiIndexLazyArray(DT, f, sizes, sizes, sizes), 1)
+        local expected = [DT(i + 100j + 10_000k) for i in 1:N, j in 1:N, k in 1:N]
+        @test Array(gt) == expected
+        for (i, j, k) in ((1, 2, 3), (N, 1, 2), (2, N, sizes[1] + 1))
+            @test gt[grid[i], grid[j], grid[k]] == expected[i, j, k]
+            @test gt[Tuple(grid[i]), Tuple(grid[j]), Tuple(grid[k])] == expected[i, j, k]
+        end
+    end
+
+    @testset "an entry has the element type, whatever the coefficient function returns" begin
+        local gt = GridTensor(
+            MultiIndexLazyArray(Float32, (I, J, K) -> 0.1, (2, 3), (2, 3), (2, 3)), 1)
+        local I = CartesianIndex(1, 2)
+        @test gt[1, 2, 3] isa Float32
+        @test gt[I, I, I] isa Float32
+        @test gt[(1, 2), (1, 2), (1, 2)] isa Float32
+        @test gt[1] isa Float32
+        @test gt[1, 2, 3] == Array(gt)[1, 2, 3] == 0.1f0
+    end
+
     @testset "the constructor checks its arguments" begin
         local lazy = MultiIndexLazyArray(Float64, (I, J, K) -> 1.0, (3, 4), (3, 4), (3, 4))
         @test GridTensor(lazy, 0) isa GridTensor
@@ -164,7 +193,8 @@ end
         # a fresh process with `--check-bounds=auto`, because `julia_cmd()` carries the
         # parent process's bounds setting, which the later flag overrides
         local prog = """
-            # App runners can omit the active project from the inherited load path.
+            # A test runner can pass on a `JULIA_LOAD_PATH` without the active project, and
+            # `--project` alone then does not make this package loadable.
             pushfirst!(LOAD_PATH, "@")
             using MultiIndexArrays
 
@@ -177,36 +207,26 @@ end
             const GT2 = GridTensor(LAZY, 2)
             const GRID = CartesianIndices((4, 5))
 
-            stencil1(i) = stencil_indices(i, 1, (4, 5))
-            stencil2(i) = stencil_indices(i, 2, (4, 5))
-            sum1(i) = sum(stencil_indices(i, 1, (4, 5)))
-            sum2(i) = sum(stencil_indices(i, 2, (4, 5)))
-            tensor1(i) = stencil_indices(GT1, i)
-            tensor2(i) = stencil_indices(GT2, i)
-            tensorsum1(i) = sum(stencil_indices(GT1, i))
-            tensorsum2(i) = sum(stencil_indices(GT2, i))
-            entry(i) = GT1[i, 3, 5]
-            entrycartesian(i) = GT1[GRID[i], GRID[3], GRID[5]]
-            entrytuple(i) = GT1[(i, 1), (3, 1), (1, 2)]
-            entrylinear(i) = GT1[i]
-
-            @assert allocations(stencil1, 7) <= 0 "stencil_indices(i, 1, sizes) allocated"
-            @assert allocations(stencil2, 7) <= 0 "stencil_indices(i, 2, sizes) allocated"
-            @assert allocations(sum1, 7) <= 0 "sum(stencil_indices(i, 1, sizes)) allocated"
-            @assert allocations(sum2, 7) <= 0 "sum(stencil_indices(i, 2, sizes)) allocated"
-            @assert allocations(tensor1, 7) <= 0 "stencil_indices(gt, i), w = 1, allocated"
-            @assert allocations(tensor2, 7) <= 0 "stencil_indices(gt, i), w = 2, allocated"
-            @assert allocations(tensorsum1, 7) <= 0 "sum(stencil_indices(gt, i)), w = 1, allocated"
-            @assert allocations(tensorsum2, 7) <= 0 "sum(stencil_indices(gt, i)), w = 2, allocated"
-            @assert allocations(entry, 2) <= 0 "gt[i, j, k] allocated"
-            @assert allocations(entrycartesian, 2) <= 0 "gt[I, J, K] allocated"
-            @assert allocations(entrytuple, 2) <= 0 "gt[(i, j), (j, k), (k, i)] allocated"
-            @assert allocations(entrylinear, 2) <= 0 "gt[n] allocated"
-            @assert collect(stencil1(7)) isa Vector{Int}
-            @assert collect(stencil2(7)) isa Vector{Int}
+            for (label, f, a) in (
+                    ("stencil_indices(i, 1, sizes)", i -> stencil_indices(i, 1, (4, 5)), 7),
+                    ("stencil_indices(i, 2, sizes)", i -> stencil_indices(i, 2, (4, 5)), 7),
+                    ("sum(stencil_indices(i, 1, sizes))", i -> sum(stencil_indices(i, 1, (4, 5))), 7),
+                    ("sum(stencil_indices(i, 2, sizes))", i -> sum(stencil_indices(i, 2, (4, 5))), 7),
+                    ("stencil_indices(gt, i), w = 1", i -> stencil_indices(GT1, i), 7),
+                    ("stencil_indices(gt, i), w = 2", i -> stencil_indices(GT2, i), 7),
+                    ("sum(stencil_indices(gt, i)), w = 1", i -> sum(stencil_indices(GT1, i)), 7),
+                    ("sum(stencil_indices(gt, i)), w = 2", i -> sum(stencil_indices(GT2, i)), 7),
+                    ("gt[i, j, k]", i -> GT1[i, 3, 5], 2),
+                    ("gt[I, J, K]", i -> GT1[GRID[i], GRID[3], GRID[5]], 2),
+                    ("gt[(i, j), (j, k), (k, i)]", i -> GT1[(i, 1), (3, 1), (1, 2)], 2),
+                    ("gt[n]", i -> GT1[i], 2))
+                @assert allocations(f, a) <= 0 "\$label allocated"
+            end
+            @assert collect(stencil_indices(7, 1, (4, 5))) isa Vector{Int}
+            @assert collect(stencil_indices(7, 2, (4, 5))) isa Vector{Int}
             # the barrier above stays silent, or it is not a barrier; this control shows it sees
             # an allocation when there is one
-            @assert allocations(collect, stencil1(7)) > 0 "the barrier sees no allocation"
+            @assert allocations(collect, stencil_indices(7, 1, (4, 5))) > 0 "the barrier sees no allocation"
             """
         local cmd = `$(Base.julia_cmd()) --startup-file=no --check-bounds=auto --project=$(Base.active_project()) -e $prog`
         @test success(cmd)
