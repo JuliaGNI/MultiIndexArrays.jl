@@ -1,24 +1,15 @@
 using MultiIndexArrays
 using Test
 
-# On Julia 1.10, a documented binding is one that `Docs.meta` holds; Julia 1.11 and later also
-# provide `Docs.hasdoc`.
-function hasdoc(mod, sym)
-    return isdefined(Docs, :hasdoc) ? Docs.hasdoc(mod, sym) :
-           haskey(Docs.meta(mod), Docs.Binding(mod, sym))
-end
-
 # The tensor of width `w` on the grid `sizes`, and the dense array of its entries. Every entry is
 # distinct and exact in `Float32`, so a permuted, shifted or reflected index map changes the result.
 # `f` computes the linear indices rather than indexing an array, so off the grid only the bounds
-# check of the tensor throws. `f` captures `zero(DT)`, not the type `DT`: on Julia 1.10 a closure
-# that captures a type infers `Any`.
+# check of the tensor throws.
 function grid_tensor_case(DT, sizes, w)
     local nx = sizes[1]
     local N = prod(sizes)
-    local z = zero(DT)
     local lin = I -> I[1] + nx * (I[2] - 1)
-    local f = (I, J, K) -> z + (lin(I) + 100 * lin(J) + 10_000 * lin(K))
+    local f = (I, J, K) -> zero(DT) + (lin(I) + 100 * lin(J) + 10_000 * lin(K))
     local lazy = MultiIndexLazyArray(DT, f, sizes, sizes, sizes)
     local expected = [DT(i + 100j + 10_000k) for i in 1:N, j in 1:N, k in 1:N]
     return (; lazy, gt = GridTensor(lazy, w), expected, N)
@@ -121,8 +112,8 @@ end
     @testset "the interface is public" begin
         @test :GridTensor in names(MultiIndexArrays)
         @test :stencil_indices in names(MultiIndexArrays)
-        @test hasdoc(MultiIndexArrays, :GridTensor)
-        @test hasdoc(MultiIndexArrays, :stencil_indices)
+        @test Docs.hasdoc(MultiIndexArrays, :GridTensor)
+        @test Docs.hasdoc(MultiIndexArrays, :stencil_indices)
     end
 
     @testset "no GridTensor method is ambiguous" begin
