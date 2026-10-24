@@ -10,16 +10,16 @@ The first release, `v0.1.0`, is not written up: its record is `git log` and the 
 is named as a gap rather than reconstructed, because a changelog assembled after the fact
 loses the reasoning that makes it worth keeping.
 
-## [Unreleased] — targeting 0.1.3
+## [0.1.3] — 2026-10-24
 
 ### Changed
 
-- **Julia 1.12 is the floor** (`[compat] julia = "1.12"`, from 1.10). A breaking change under
-  this package's pre-1.0 convention: a caller on Julia 1.10 or 1.11 can no longer install this
-  version. The package's code does not change. The test suite drops two workarounds that
-  existed only for Julia 1.10: a `hasdoc` helper that fell back on `Docs.meta`, now
-  `Docs.hasdoc`, and a closure in `test/grid_tensor.jl` that captured `zero(DT)` because a
-  closure capturing a type inferred `Any`; it captures `DT` now.
+- **Julia 1.12 is the floor** (`[compat] julia = "1.12"`, from 1.10). A patch release, because no
+  API changes: a caller on Julia 1.10 or 1.11 can no longer install this version. The package's
+  code does not change. The test suite drops two workarounds that existed only for Julia 1.10: a
+  `hasdoc` helper that fell back on `Docs.meta`, now `Docs.hasdoc`, and a closure in
+  `test/grid_tensor.jl` that captured `zero(DT)` because a closure capturing a type inferred
+  `Any`; it captures `DT` now.
 
 ## [0.1.2] — 2026-10-12
 
