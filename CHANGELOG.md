@@ -10,6 +10,16 @@ The first release, `v0.1.0`, is not written up: its record is `git log` and the 
 is named as a gap rather than reconstructed, because a changelog assembled after the fact
 loses the reasoning that makes it worth keeping.
 
+## [Unreleased] — targeting 0.1.4
+
+### Changed
+
+- **The Aqua `unbound_args` check is off (K3).** The test suite no longer runs it
+  (`unbound_args = false`, issue #4) where it was marked broken. On Julia 1.14 and 1.15 the check
+  finds no unbound type parameters, and Aqua reports the broken mark as an error, so the `pre` and
+  `nightly` CI jobs failed. The package's code does not change, and the other Aqua checks run as
+  before.
+
 ## [0.1.3] — 2026-10-24
 
 ### Changed
